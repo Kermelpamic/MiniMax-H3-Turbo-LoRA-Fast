@@ -1,0 +1,15 @@
+---
+title: MiniMax H3 Turbo LoRA Fast
+emoji: 🚀
+colorFrom: green
+colorTo: purple
+sdk: gradio
+sdk_version: 6.26.0
+python_version: '3.13'
+app_file: app.py
+pinned: false
+license: apache-2.0
+short_description: MiniMax-H3 LoRA Demo
+---
+
+Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
