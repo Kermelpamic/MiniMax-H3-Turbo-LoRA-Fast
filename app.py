@@ -103,19 +103,6 @@ def _set_lora(transformer, name: str) -> str:
         return "off"
 
 
-def status() -> str:
-    if LOAD_ERROR:
-        return LOAD_ERROR
-    if PIPE is None:
-        return f"Loading `{MODEL_REPO}` (transformer + VAEs, 77.3 GB). See the Space logs."
-    audio_note = "video-only pipeline active" if MUTE_PIPE is not None else f"video-only pipeline not available ({MUTE_ERROR})"
-    return (
-        f"Ready · transformer + VAEs **bfloat16, unquantized** · placement `{PLACEMENT}` · attention `{ATTENTION}` "
-        f"· {LORA_STATUS or 'no LoRA'} · {audio_note} · window {MIN_UI_DURATION:g}–{MAX_UI_DURATION:g}s "
-        f"· loaded in {LOADED_IN:.0f}s · conditioner `{CONDITIONER_SPACE}`"
-    )
-
-
 def load_models() -> str | None:
     global PIPE, MUTE_PIPE, MANAGER, LOAD_ERROR, MUTE_ERROR, LOADED_IN, LORA_STATUS
 
@@ -585,7 +572,6 @@ and the VAEs.
 
 with gr.Blocks(title="MiniMax-H3-Turbo-LoRA-Fast") as demo:
     gr.Markdown(INTRO)
-    banner = gr.Markdown(status())
 
     with gr.Row():
         with gr.Column(scale=3):
@@ -605,15 +591,15 @@ with gr.Blocks(title="MiniMax-H3-Turbo-LoRA-Fast") as demo:
                     value="single",
                 )
             duration = gr.Slider(
-                MIN_UI_DURATION, MAX_UI_DURATION, value=5, step=0.5,
+                MIN_UI_DURATION, MAX_UI_DURATION, value=4, step=0.5,
                 label="Length (s)", info="Rounded up to the next 17n+5 at 24 fps.",
             )
             with gr.Row():
-                with_audio = gr.Checkbox(label="Generate audio", value=True)
+                with_audio = gr.Checkbox(label="Generate audio", value=False)
                 upsample = gr.Checkbox(label="Prompt upsampling (+15–50s)", value=False)
-            with gr.Accordion("Advanced", open=False):
+            with gr.Accordion("Advanced", open=True):
                 steps = gr.Slider(2, 12, value=6, step=1, label="Steps")
-                lora = gr.Dropdown(label="Turbo/Style-LoRA", choices=list(LORA_NAMES), value="larry")
+                lora = gr.Dropdown(label="Turbo/Style-LoRA", choices=list(LORA_NAMES), value="lightx")
                 seed = gr.Number(label="Seed (clip i = seed + i)", value=42, precision=0)
                 gpu_duration = gr.Slider(
                     minimum=GPU_DURATION_CHOICES[0],
@@ -636,7 +622,6 @@ with gr.Blocks(title="MiniMax-H3-Turbo-LoRA-Fast") as demo:
     for control in cost_inputs:
         control.change(cost_hint, cost_inputs, cost)
     demo.load(cost_hint, cost_inputs, cost)
-    demo.load(status, None, banner)
 
     run_button.click(
         run,
@@ -649,4 +634,4 @@ with gr.Blocks(title="MiniMax-H3-Turbo-LoRA-Fast") as demo:
 load_models()
 
 if __name__ == "__main__":
-    demo.queue(default_concurrency_limit=1, max_size=8).launch(show_error=True, allowed_paths=[OUTPUT_DIR])
+    demo.queue(default_concurrency_limit=1, max_size=8).launch(theme="ibm-software/gradio-carbon-theme", show_error=True, allowed_paths=[OUTPUT_DIR])
