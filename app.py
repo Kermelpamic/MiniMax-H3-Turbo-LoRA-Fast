@@ -1,3 +1,10 @@
+"""MiniMax-H3-Turbo-LoRA-Fast — the denoising half of a split MiniMax-H3 deployment.
+
+The 62 GiB Qwen3-VL text encoder runs in a separate conditioner Space; this Space loads the transformer and the
+VAEs, folds the selected Turbo/Style LoRA into the bf16 weights, and serves first/last-frame video generation up
+to 20 seconds with optional audio.
+"""
+
 from __future__ import annotations
 
 import math
@@ -7,16 +14,10 @@ import subprocess
 import tempfile
 import time
 import traceback
-import base64
-import json
 from functools import cache
-from io import BytesIO
-from PIL import Image
 
 import spaces
 import gradio as gr
-from gradio import Server
-from fastapi.responses import HTMLResponse
 
 MODEL_REPO = os.environ.get("H3_MODEL_REPO", "MiniMaxAI/MiniMax-H3")
 CONDITIONER_SPACE = os.environ.get("H3_CONDITIONER", "multimodalart/qwen3vl-conditioner")
@@ -52,8 +53,9 @@ PIPELINE_MAX_DURATION = MAX_UI_DURATION + 1.0
 CHUNK_SECONDS = float(os.environ.get("H3_CHUNK_SECONDS", "14"))
 CONDITIONER_MAX_FRAMES = int(os.environ.get("H3_CONDITIONER_MAX_FRAMES", "345"))
 
+# Allowed GPU-duration choices (seconds) exposed in the Advanced panel.
 GPU_DURATION_CHOICES = (60, 90, 120, 150, 180, 250)
-DEFAULT_GPU_DURATION = 120
+DEFAULT_GPU_DURATION = 90
 
 OUTPUT_DIR = os.path.join(tempfile.gettempdir(), "h3-outputs")
 
@@ -75,6 +77,7 @@ def snap_frames(seconds: float) -> int:
 
 def patch_duration_window(minimum: float, maximum: float) -> None:
     from diffusers.modular_pipelines.minimax_h3.modular_pipeline import MiniMaxH3ModularPipeline
+
     MiniMaxH3ModularPipeline.min_duration = property(lambda self: float(minimum))
     MiniMaxH3ModularPipeline.max_duration = property(lambda self: float(maximum))
 
@@ -82,17 +85,19 @@ def patch_duration_window(minimum: float, maximum: float) -> None:
 def _apply_lora(transformer) -> str | None:
     try:
         import h3_lora
+
         return h3_lora.apply_lora(transformer)
     except ImportError:
-        return "⚠️ `h3_lora.py` is missing — running without the Turbo LoRA."
+        return "⚠️ `h3_lora.py` is missing — running without the Turbo LoRA. Raise the steps or add the file (README)"
     except Exception as error:
         traceback.print_exc()
-        return f"⚠️ LoRA loading failed ({type(error).__name__}: {error})"
+        return f"⚠️ LoRA loading failed ({type(error).__name__}: {error}) — running without"
 
 
 def _set_lora(transformer, name: str) -> str:
     try:
         import h3_lora
+
         return h3_lora.set_active(transformer, name)
     except Exception:
         return "off"
@@ -100,6 +105,7 @@ def _set_lora(transformer, name: str) -> str:
 
 def load_models() -> str | None:
     global PIPE, MUTE_PIPE, MANAGER, LOAD_ERROR, MUTE_ERROR, LOADED_IN, LORA_STATUS
+
     if PIPE is not None or LOAD_ERROR is not None:
         return LOAD_ERROR
 
@@ -107,6 +113,7 @@ def load_models() -> str | None:
     try:
         import torch
         from diffusers import ComponentsManager
+
         from h3_split_blocks import MiniMaxH3GeneratorBlocks
 
         patch_duration_window(MIN_UI_DURATION, PIPELINE_MAX_DURATION)
@@ -144,6 +151,7 @@ def load_models() -> str | None:
 def _build_mute_pipe(pipe):
     try:
         from h3_split_blocks import MiniMaxH3MuteGeneratorBlocks
+
         blocks = MiniMaxH3MuteGeneratorBlocks()
         mute = blocks.init_pipeline(MODEL_REPO)
         shared = {}
@@ -178,6 +186,7 @@ def _arm_decode_hooks(pipe):
 @cache
 def conditioner():
     from gradio_client import Client
+
     return Client(CONDITIONER_SPACE)
 
 
@@ -185,6 +194,7 @@ def conditioner_client(ip_token):
     if not ip_token:
         return conditioner()
     from gradio_client import Client
+
     return Client(CONDITIONER_SPACE, headers={"x-ip-token": ip_token})
 
 
@@ -228,8 +238,13 @@ def estimate_seconds(height, width, num_frames, steps, num_keyframes=0, with_aud
 
 def get_duration(
     prompt_embeds, text_token_tags, image, last_image, height, width, num_frames, steps, seed,
-    lora="lightx", with_audio=True, gpu_duration=DEFAULT_GPU_DURATION, *a, **k
+    lora="larry", with_audio=True, gpu_duration=DEFAULT_GPU_DURATION, *a, **k
 ):
+    """Duration callback for `@spaces.GPU`.
+
+    Honors an explicit user override (`gpu_duration`) when it is one of the
+    allowed choices; otherwise falls back to the empirical estimate.
+    """
     if gpu_duration:
         try:
             value = int(gpu_duration)
@@ -244,10 +259,12 @@ def get_duration(
 @spaces.GPU(duration=get_duration, size=GPU_SIZE)
 def _generate(
     prompt_embeds, text_token_tags, image, last_image, height, width, num_frames, steps, seed,
-    lora="lightx", with_audio=True, gpu_duration=DEFAULT_GPU_DURATION,
+    lora="larry", with_audio=True, gpu_duration=DEFAULT_GPU_DURATION,
 ):
     import torch
+
     active_lora = _set_lora(PIPE.transformer, lora)
+
     pipe = PIPE if (with_audio or MUTE_PIPE is None) else MUTE_PIPE
     decoded_audio = with_audio or MUTE_PIPE is None
 
@@ -277,6 +294,7 @@ def _generate(
 
 def _fit_keyframe(image_path, current_canvas):
     from PIL import Image as _Image
+
     img = _Image.open(image_path)
     aspect = img.width / img.height
     fastest = {}
@@ -311,7 +329,7 @@ LORA_NAMES = ("larry", "lightx", "lightx8", "realism", "joyfox", "H3-Facial-Real
 
 def _resolve_lora(lora) -> str:
     if not isinstance(lora, str) or not lora.strip():
-        return "lightx"
+        return "larry"
     value = lora.strip().lower()
     lowered = {name.lower(): name for name in LORA_NAMES}
     if value in lowered:
@@ -322,8 +340,15 @@ def _resolve_lora(lora) -> str:
     raise gr.Error(f"Unknown LoRA `{lora}`. Allowed: {', '.join(LORA_NAMES)}.")
 
 
+def _as_path(value):
+    if isinstance(value, dict):
+        value = value.get("path") or (value.get("url") or "").removeprefix("/gradio_api/file=")
+    return value or None
+
+
 def keyframe(path):
     from PIL import Image, ImageOps
+
     return ImageOps.exif_transpose(Image.open(path)).convert("RGB") if path else None
 
 
@@ -332,6 +357,7 @@ def _render_clip(prompt, first, last, canvas, duration, steps, seed, upsample, l
     from diffusers.utils import encode_video
 
     num_frames = snap_frames(duration)
+
     conditioned = time.time()
     prompt_embeds, text_token_tags, metadata, plan = encode_remote(
         prompt, first, last, canvas, num_frames, rewrite_prompt=upsample, ip_token=ip_token
@@ -399,8 +425,8 @@ CHAIN_SUFFIX = (
 
 
 def generate(
-    prompt, first_frame=None, last_frame=None, canvas=DEFAULT_CANVAS, duration=3.0, mode="single",
-    steps=5, seed=42, upsample=False, lora="lightx", with_audio=True, ip_token=None, progress=None,
+    prompt, first_frame=None, last_frame=None, canvas=DEFAULT_CANVAS, duration=5.0, mode="single",
+    steps=6, seed=42, upsample=False, lora="larry", with_audio=True, ip_token=None, progress=None,
     gpu_duration=DEFAULT_GPU_DURATION,
 ):
     if LOAD_ERROR:
@@ -416,6 +442,7 @@ def generate(
     duration = max(MIN_UI_DURATION, min(float(duration), MAX_UI_DURATION))
     with_audio = bool(with_audio)
 
+    # Normalize GPU-duration override to one of the allowed choices.
     try:
         gpu_duration = int(gpu_duration)
     except (TypeError, ValueError):
@@ -423,7 +450,7 @@ def generate(
     if gpu_duration not in GPU_DURATION_CHOICES:
         gpu_duration = min(GPU_DURATION_CHOICES, key=lambda v: abs(v - gpu_duration))
 
-    first, last = first_frame, last_frame
+    first, last = _as_path(first_frame), _as_path(last_frame)
     if first:
         first, canvas = _fit_keyframe(first, canvas)
     if last:
@@ -482,67 +509,129 @@ def generate(
         shutil.rmtree(work, ignore_errors=True)
 
 
-def save_b64_image(b64_str):
-    if not b64_str: return None
-    if "," in b64_str:
-        _, data = b64_str.split(",", 1)
-    else:
-        data = b64_str
-    img_data = base64.b64decode(data)
-    temp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-    temp_file.write(img_data)
-    temp_file.close()
-    return temp_file.name
+def _caller_ip_token(request: gr.Request | None) -> str | None:
+    if request is None:
+        return None
+    headers = getattr(request, "headers", None)
+    return headers.get("x-ip-token") if headers is not None else None
 
-# ── Gradio Server (Server mode): FastAPI + Gradio queue/API engine ────────────
-app = Server(title="MiniMax-H3-Turbo-LoRA-Fast")
 
-@app.mcp.tool(name="generate_video")
-@app.api(name="generate_video")
-def infer(
-    prompt: str,
-    images_b64_json: str,
-    canvas: str,
-    duration: float,
-    mode: str,
-    steps: int,
-    seed: int,
-    upsample: bool,
-    lora: str,
-    with_audio: bool,
-    gpu_duration: int,
-) -> dict:
-    """Generates a video using MiniMax-H3-Turbo-LoRA-Fast."""
-    images = json.loads(images_b64_json) if images_b64_json else []
-    first_frame = save_b64_image(images[0]) if len(images) > 0 else None
-    last_frame = save_b64_image(images[1]) if len(images) > 1 else None
-    
-    final_video_path, summary, refined = generate(
+def run(prompt, first_frame, last_frame, canvas, duration, mode, steps, seed, upsample, lora, with_audio,
+        gpu_duration, request: gr.Request = None, progress=gr.Progress()):
+    return generate(
         prompt, first_frame, last_frame, canvas, duration, mode, steps, seed, upsample, lora, with_audio,
-        ip_token=None, progress=None, gpu_duration=gpu_duration
+        ip_token=_caller_ip_token(request), progress=progress, gpu_duration=gpu_duration,
     )
-    
-    with open(final_video_path, "rb") as f:
-        video_b64 = base64.b64encode(f.read()).decode()
-    os.remove(final_video_path)
-    
-    return {
-        "video": f"data:video/mp4;base64,{video_b64}",
-        "report": summary,
-        "refined": refined
-    }
 
-@app.get("/api/config")
-def client_config():
-    return {"examples": []}
 
-@app.get("/", response_class=HTMLResponse)
-async def homepage():
-    html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
-    with open(html_path, "r", encoding="utf-8") as f:
-        return f.read()
+def cost_hint(canvas, duration, mode, steps, first_frame, last_frame, with_audio, gpu_duration):
+    try:
+        height, width = CANVASES.get(canvas, CANVASES[DEFAULT_CANVAS])
+        keyframes = int(bool(first_frame)) + int(bool(last_frame))
+        durations = [float(duration)] if mode == "single" else plan_clips(float(duration), CHUNK_SECONDS)
+        estimated = sum(
+            estimate_seconds(height, width, snap_frames(d), int(steps), keyframes, bool(with_audio))
+            for d in durations
+        )
+        try:
+            gd = int(gpu_duration)
+        except (TypeError, ValueError):
+            gd = DEFAULT_GPU_DURATION
+        booking = gd * len(durations) if gd in GPU_DURATION_CHOICES else estimated
+        frames = sum(snap_frames(d) for d in durations)
+        parts = [
+            f"{width}x{height}",
+            f"{frames} frames ({frames / FPS:.2f}s)",
+            f"{len(durations)} pass(es)",
+            f"~{booking}s GPU booking" + (f" ({gd}s/clip override)" if gd in GPU_DURATION_CHOICES else " (auto-estimate)"),
+        ]
+        if not with_audio:
+            parts.append("audio VAE stays on the host")
+        if mode == "single" and float(duration) > 15:
+            parts.append("⚠️ >15s extrapolates")
+        return " · ".join(parts)
+    except Exception as error:
+        return f"(estimate unavailable: {error})"
+
+
+INTRO = f"""# MiniMax-H3-Turbo-LoRA-Fast
+
+Denoising half of a split deployment: the 62 GiB Qwen3-VL text encoder runs in
+[`{CONDITIONER_SPACE}`](https://huggingface.co/spaces/{CONDITIONER_SPACE}); this Space holds only the transformer
+and the VAEs.
+
+* **First/Last Frame** — both optional and usable individually. A last frame alone means "generate *towards* this image".
+* **Length** — `single` is one pass with a raised ceiling (H3 is trained up to 15 s; beyond that is experimental).
+  `chain` cuts the video into clips of at most {CHUNK_SECONDS:g}s and hands the last frame of each clip to the next.
+* **Audio** — when disabled, the audio VAE is never declared, never moved to the GPU and never decoded. The audio
+  rows themselves are always denoised by H3; they are part of the same packed sequence.
+* **GPU Duration** — override the ZeroGPU booking per clip in the Advanced panel
+  (choices: {', '.join(str(v) for v in GPU_DURATION_CHOICES)} s; default {DEFAULT_GPU_DURATION} s).
+"""
+
+
+with gr.Blocks(title="MiniMax-H3-Turbo-LoRA-Fast") as demo:
+    gr.Markdown(INTRO)
+
+    with gr.Row():
+        with gr.Column(scale=3):
+            prompt = gr.Textbox(
+                label="Prompt",
+                lines=4,
+                value="An extreme close-up shot focuses on a young Asian woman with auburn-tinted hair and silver ear piercings, gazing intensely toward the camera. She subtly blinks and shifts her deep brown eyes with a contemplative expression as soft, warm ambient light highlights fine skin texture, natural blemishes, and delicate facial micro-movements.",
+            )
+            with gr.Row():
+                first_frame = gr.Image(label="First Frame (optional)", type="filepath", height=200)
+                last_frame = gr.Image(label="Last Frame (optional)", type="filepath", height=200)
+            with gr.Row():
+                canvas = gr.Dropdown(label="Canvas", choices=list(CANVASES), value=DEFAULT_CANVAS)
+                mode = gr.Radio(
+                    label="Duration mode",
+                    choices=[("single (1 pass)", "single"), (f"chain (clips ≤ {CHUNK_SECONDS:g}s)", "chain")],
+                    value="single",
+                )
+            duration = gr.Slider(
+                MIN_UI_DURATION, MAX_UI_DURATION, value=4, step=0.5,
+                label="Length (s)", info="Rounded up to the next 17n+5 at 24 fps.",
+            )
+            with gr.Row():
+                with_audio = gr.Checkbox(label="Generate audio", value=False)
+                upsample = gr.Checkbox(label="Prompt upsampling (+15–50s)", value=False)
+            with gr.Accordion("Advanced", open=True):
+                steps = gr.Slider(2, 12, value=6, step=1, label="Steps")
+                lora = gr.Dropdown(label="Turbo/Style-LoRA", choices=list(LORA_NAMES), value="lightx")
+                seed = gr.Number(label="Seed (clip i = seed + i)", value=42, precision=0)
+                gpu_duration = gr.Slider(
+                    minimum=GPU_DURATION_CHOICES[0],
+                    maximum=GPU_DURATION_CHOICES[-1],
+                    value=DEFAULT_GPU_DURATION,
+                    step=10,
+                    label="GPU Duration (s per clip)",
+                    info=f"Allowed: {', '.join(str(v) for v in GPU_DURATION_CHOICES)} s · "
+                         f"default {DEFAULT_GPU_DURATION} s · overrides ZeroGPU booking per clip.",
+                )
+            cost = gr.Markdown()
+            run_button = gr.Button("Generate video", variant="primary")
+
+        with gr.Column(scale=2):
+            output_video = gr.Video(label="Result", format="mp4", autoplay=True)
+            report = gr.Markdown(label="Report")
+            refined = gr.Textbox(label="Refined Prompt", lines=4)
+
+    cost_inputs = [canvas, duration, mode, steps, first_frame, last_frame, with_audio, gpu_duration]
+    for control in cost_inputs:
+        control.change(cost_hint, cost_inputs, cost)
+    demo.load(cost_hint, cost_inputs, cost)
+
+    run_button.click(
+        run,
+        [prompt, first_frame, last_frame, canvas, duration, mode, steps, seed, upsample, lora, with_audio, gpu_duration],
+        [output_video, report, refined],
+        api_name="generate",
+    )
+
 
 load_models()
 
 if __name__ == "__main__":
-    app.launch(show_error=True, mcp_server=True, allowed_paths=[OUTPUT_DIR])
+    demo.queue(default_concurrency_limit=1, max_size=8).launch(theme=gr.themes.Citrus(), show_error=True, allowed_paths=[OUTPUT_DIR])
