@@ -634,4 +634,4 @@ with gr.Blocks(title="MiniMax-H3-Turbo-LoRA-Fast") as demo:
 load_models()
 
 if __name__ == "__main__":
-    demo.queue(default_concurrency_limit=1, max_size=8).launch(theme="ibm-software/gradio-carbon-theme", show_error=True, allowed_paths=[OUTPUT_DIR])
+    demo.queue(default_concurrency_limit=1, max_size=8).launch(theme=gr.themes.Citrus(), show_error=True, allowed_paths=[OUTPUT_DIR])
