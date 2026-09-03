@@ -100,22 +100,10 @@ body{
     display:flex;align-items:center;gap:10px;padding:8px 16px;
     border-bottom:1px solid var(--border);background:var(--panel2);flex-shrink:0;
 }
-.seg-control{
-    display:inline-flex;background:var(--panel);border:1px solid var(--border);
-    border-radius:8px;padding:2px;gap:2px;
-}
-.seg-btn{
-    padding:4px 14px;font-size:11px;font-weight:600;color:var(--dim);
-    background:transparent;border:none;border-radius:6px;cursor:pointer;
-    font-family:'Inter',sans-serif;transition:all .15s;letter-spacing:.2px;
-}
-.seg-btn:hover:not(.active){color:var(--muted)}
-.seg-btn.active{background:rgba(255,255,255,.18);color:var(--accent2)}
 .canvas-meta{
     font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--faint);
     overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex:1;
 }
-.canvas-actions{display:flex;align-items:center;gap:6px}
 
 .canvas-stage{
     flex:1;position:relative;overflow:hidden;min-height:0;
@@ -287,13 +275,6 @@ body{
 }
 .btn-run:active:not(:disabled){transform:translateY(0)}
 .btn-run:disabled{opacity:.55;cursor:not-allowed}
-.btn-cancel{
-    display:flex;align-items:center;justify-content:center;gap:6px;width:100%;
-    margin-top:8px;background:transparent;border:1px solid var(--border2);border-radius:9px;
-    padding:8px 24px;cursor:pointer;font-size:12px;font-weight:600;font-family:'Inter',sans-serif;
-    color:var(--muted);transition:all .15s;
-}
-.btn-cancel:hover{border-color:#ef4444;color:#ef4444;background:rgba(239,68,68,.08)}
 .run-hint{
     text-align:center;font-size:10px;color:var(--faint);margin-top:8px;
     font-family:'JetBrains Mono',monospace;
@@ -330,14 +311,6 @@ body{
 .checkbox-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-bottom:10px}
 .checkbox-row input[type="checkbox"]{accent-color:var(--accent);width:15px;height:15px;cursor:pointer}
 .checkbox-row label{color:var(--muted);font-size:12px;cursor:pointer}
-
-/* Examples page */
-.examples-list{padding:12px 14px;display:flex;flex-direction:column;gap:10px}
-.example-card{
-    background:var(--panel2);border:1px solid var(--border);
-    border-radius:10px;overflow:hidden;cursor:pointer;transition:all .2s ease;flex-shrink:0;
-    display:flex;align-items:stretch;
-}
 
 /* ══ Status bar ══ */
 .statusbar{
@@ -483,12 +456,14 @@ body{
 
     <!-- Edit page -->
     <div class="insp-page active" id="page-edit">
+      <!-- Prompt -->
       <div class="insp-section">
         <div class="insp-section-title"><span>Prompt</span><span class="char-count" id="char-count">0</span></div>
         <textarea id="custom-prompt-input" class="modern-textarea" rows="4"
                   placeholder="Describe your scene..."></textarea>
       </div>
 
+      <!-- Canvas & Mode -->
       <div class="insp-section">
         <div class="insp-section-title"><span>Canvas & Mode</span></div>
         <select id="custom-canvas" class="lora-native-select">
@@ -509,23 +484,32 @@ body{
             <option>1152x512 · 21:9 fast</option>
             <option>1536x672 · 21:9 full</option>
         </select>
-        <select id="custom-mode" class="lora-native-select">
+        <select id="custom-mode" class="lora-native-select" style="margin-bottom:0;">
             <option value="single">single (1 pass)</option>
             <option value="chain">chain (clips ≤ 14s)</option>
         </select>
       </div>
 
+      <!-- Generate Video Button -->
+      <div class="insp-section">
+        <button id="custom-run-btn" class="btn-run">
+          <span id="run-btn-label">Generate Video</span>
+        </button>
+        <div class="run-hint">⌘/Ctrl + Enter</div>
+      </div>
+
+      <!-- Settings -->
       <div class="insp-section">
         <div class="insp-section-title"><span>Settings</span></div>
         <div class="slider-row">
           <label>Length</label>
-          <input type="range" id="custom-duration" min="2" max="20" step="0.5" value="4">
-          <span class="slider-val" id="custom-duration-val">4s</span>
+          <input type="range" id="custom-duration" min="2" max="20" step="0.5" value="3">
+          <span class="slider-val" id="custom-duration-val">3s</span>
         </div>
         <div class="slider-row">
           <label>Steps</label>
-          <input type="range" id="custom-steps" min="2" max="12" step="1" value="6">
-          <span class="slider-val" id="custom-steps-val">6</span>
+          <input type="range" id="custom-steps" min="2" max="12" step="1" value="5">
+          <span class="slider-val" id="custom-steps-val">5</span>
         </div>
         <div class="checkbox-row">
           <input type="checkbox" id="custom-audio">
@@ -537,11 +521,12 @@ body{
         </div>
       </div>
 
+      <!-- LoRA & Seed -->
       <div class="insp-section">
         <div class="insp-section-title"><span>LoRA & Seed</span></div>
         <select id="custom-lora" class="lora-native-select">
             <option value="larry">larry</option>
-            <option value="lightx">lightx</option>
+            <option value="lightx" selected>lightx</option>
             <option value="lightx8">lightx8</option>
             <option value="realism">realism</option>
             <option value="joyfox">joyfox</option>
@@ -558,22 +543,17 @@ body{
         </div>
       </div>
 
-      <div class="insp-section">
-        <button id="custom-run-btn" class="btn-run">
-          <span id="run-btn-label">Generate Video</span>
-        </button>
-        <div class="run-hint">⌘/Ctrl + Enter</div>
-      </div>
-
+      <!-- Advanced -->
       <div class="insp-section">
         <div class="insp-section-title"><span>Advanced</span></div>
         <div class="slider-row">
-          <label>GPU Dur</label>
-          <input type="range" id="custom-gpu-dur" min="60" max="250" step="10" value="90">
-          <span class="slider-val" id="custom-gpu-dur-val">90s</span>
+          <label>GPU (s)</label>
+          <input type="range" id="custom-gpu-dur" min="60" max="250" step="10" value="120">
+          <span class="slider-val" id="custom-gpu-dur-val">120s</span>
         </div>
       </div>
 
+      <!-- Report -->
       <div class="insp-section">
         <div class="insp-section-title"><span>Report & Refined Prompt</span></div>
         <textarea id="custom-report" class="modern-textarea" rows="4" readonly placeholder="Report will appear here..."></textarea>
