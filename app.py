@@ -53,7 +53,7 @@ CHUNK_SECONDS = float(os.environ.get("H3_CHUNK_SECONDS", "14"))
 CONDITIONER_MAX_FRAMES = int(os.environ.get("H3_CONDITIONER_MAX_FRAMES", "345"))
 
 GPU_DURATION_CHOICES = (60, 90, 120, 150, 180, 250)
-DEFAULT_GPU_DURATION = 90
+DEFAULT_GPU_DURATION = 120
 
 OUTPUT_DIR = os.path.join(tempfile.gettempdir(), "h3-outputs")
 
@@ -228,7 +228,7 @@ def estimate_seconds(height, width, num_frames, steps, num_keyframes=0, with_aud
 
 def get_duration(
     prompt_embeds, text_token_tags, image, last_image, height, width, num_frames, steps, seed,
-    lora="larry", with_audio=True, gpu_duration=DEFAULT_GPU_DURATION, *a, **k
+    lora="lightx", with_audio=True, gpu_duration=DEFAULT_GPU_DURATION, *a, **k
 ):
     if gpu_duration:
         try:
@@ -244,7 +244,7 @@ def get_duration(
 @spaces.GPU(duration=get_duration, size=GPU_SIZE)
 def _generate(
     prompt_embeds, text_token_tags, image, last_image, height, width, num_frames, steps, seed,
-    lora="larry", with_audio=True, gpu_duration=DEFAULT_GPU_DURATION,
+    lora="lightx", with_audio=True, gpu_duration=DEFAULT_GPU_DURATION,
 ):
     import torch
     active_lora = _set_lora(PIPE.transformer, lora)
@@ -311,7 +311,7 @@ LORA_NAMES = ("larry", "lightx", "lightx8", "realism", "joyfox", "H3-Facial-Real
 
 def _resolve_lora(lora) -> str:
     if not isinstance(lora, str) or not lora.strip():
-        return "larry"
+        return "lightx"
     value = lora.strip().lower()
     lowered = {name.lower(): name for name in LORA_NAMES}
     if value in lowered:
@@ -399,8 +399,8 @@ CHAIN_SUFFIX = (
 
 
 def generate(
-    prompt, first_frame=None, last_frame=None, canvas=DEFAULT_CANVAS, duration=5.0, mode="single",
-    steps=6, seed=42, upsample=False, lora="larry", with_audio=True, ip_token=None, progress=None,
+    prompt, first_frame=None, last_frame=None, canvas=DEFAULT_CANVAS, duration=3.0, mode="single",
+    steps=5, seed=42, upsample=False, lora="lightx", with_audio=True, ip_token=None, progress=None,
     gpu_duration=DEFAULT_GPU_DURATION,
 ):
     if LOAD_ERROR:
