@@ -7,7 +7,7 @@ transformers==5.8.0
 accelerate==1.14.0
 huggingface-hub
 gradio
-spaces==0.51.1
+spaces==0.51.3
 av
 pillow
 numpy
