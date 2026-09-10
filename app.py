@@ -337,8 +337,7 @@ def _fit_keyframe(image_path, current_canvas):
     return image_path, label
 
 
-LORA_NAMES = ("larry", "lightx", "lightx8", "realism", "joyfox", "H3-Facial-Realism-CloseUp", "off")
-
+LORA_NAMES = ("larry", "lightx", "lightx8", "realism", "joyfox", "H3-Facial-Realism-CloseUp", "H3-I2V-Anime-Motion", "off")
 
 def _resolve_lora(lora) -> str:
     if not isinstance(lora, str) or not lora.strip():
