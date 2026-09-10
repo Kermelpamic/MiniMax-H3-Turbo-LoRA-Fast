@@ -54,7 +54,7 @@ CHUNK_SECONDS = float(os.environ.get("H3_CHUNK_SECONDS", "14"))
 CONDITIONER_MAX_FRAMES = int(os.environ.get("H3_CONDITIONER_MAX_FRAMES", "345"))
 
 GPU_DURATION_CHOICES = (60, 90, 120, 150, 180, 250)
-DEFAULT_GPU_DURATION = 90
+DEFAULT_GPU_DURATION = 120
 
 OUTPUT_DIR = os.path.join(tempfile.gettempdir(), "h3-outputs")
 
@@ -550,6 +550,8 @@ def cost_hint(canvas, duration, mode, steps, first_frame, last_frame, with_audio
 
 
 with gr.Blocks(title="MiniMax-H3-Turbo-LoRA-Fast") as demo:
+    gr.Markdown("""# MiniMax-H3-Turbo-LoRA-Fast""")
+    
     with gr.Row():
         with gr.Column(scale=3):
             prompt = gr.Textbox(
@@ -572,7 +574,7 @@ with gr.Blocks(title="MiniMax-H3-Turbo-LoRA-Fast") as demo:
                 label="Length (s)", info="Rounded up to the next 17n+5 at 24 fps.",
             )
             with gr.Row():
-                with_audio = gr.Checkbox(label="Generate audio", value=True)
+                with_audio = gr.Checkbox(label="Generate audio", value=False)
                 upsample = gr.Checkbox(label="Prompt upsampling (+15–50s)", value=False)
             with gr.Accordion("Advanced", open=False):
                 steps = gr.Slider(2, 12, value=6, step=1, label="Steps")
