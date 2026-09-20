@@ -50,10 +50,15 @@ The supported checkpoints ship in different layouts:
   first frame for the intended effect. It wants the full step count, not 4–6, and is loaded through the same
   `_load_auto` layout detection as the facial LoRA.
 
+* `H3-Rough-2D-Cartoon-Illustration` (`prithivMLmods/MiniMax-H3-Rough-2D-Cartoon-Illustration`) is a rough 2D
+  cartoon illustration style LoRA — it wants the full step count, not 4–6, and is loaded through the same
+  `_load_auto` layout detection as the other prithivMLmods style LoRAs.
+
 `H3_LORA` selects the larry file (`off` skips loading it), `H3_LIGHTX=off` skips lightx, `H3_REALISM=off` skips
 realism, `H3_JOYFOX=off` skips joyfox, `H3_LIGHTX8=off` skips the lightx 8-step file, `H3_FACIAL=off` skips the
-facial realism LoRA, `H3_ANIME=off` skips the anime motion LoRA, `H3_LORA_DEFAULT` picks which set starts
-folded, and `H3_LORA_STRENGTH` is the larry card's sharpness/artifact dial.
+facial realism LoRA, `H3_ANIME=off` skips the anime motion LoRA, `H3_ROUGH=off` skips the rough 2D cartoon
+illustration LoRA, `H3_LORA_DEFAULT` picks which set starts folded, and `H3_LORA_STRENGTH` is the larry card's
+sharpness/artifact dial.
 """
 
 from __future__ import annotations
@@ -78,6 +83,9 @@ FACIAL_NAME = "H3-Facial-Realism-CloseUp"
 ANIME_REPO = os.environ.get("H3_ANIME_REPO", "prithivMLmods/MiniMax-H3-I2V-Anime-Motion-LoRA")
 ANIME_FILE = os.environ.get("H3_ANIME_FILE", "MiniMax-H3-I2V-Anime-Motion-LoRA-1400.safetensors")
 ANIME_NAME = "H3-I2V-Anime-Motion"
+ROUGH_REPO = os.environ.get("H3_ROUGH_REPO", "prithivMLmods/MiniMax-H3-Rough-2D-Cartoon-Illustration")
+ROUGH_FILE = os.environ.get("H3_ROUGH_FILE", "minimax-h3-rough-2d-cartoon-illustration-1200.safetensors")
+ROUGH_NAME = "H3-Rough-2D-Cartoon-Illustration"
 LARRY_STRENGTH = float(os.environ.get("H3_LORA_STRENGTH", "1.0"))
 DEFAULT_LORA = os.environ.get("H3_LORA_DEFAULT", "larry")
 
@@ -233,6 +241,10 @@ def _load_anime(inner_dim: int) -> dict:
     return _load_auto(ANIME_REPO, ANIME_FILE, inner_dim)
 
 
+def _load_rough(inner_dim: int) -> dict:
+    return _load_auto(ROUGH_REPO, ROUGH_FILE, inner_dim)
+
+
 def _apply(entries, params, sign: float) -> None:
     for key, a, b in entries:
         param = params.get(key)
@@ -273,6 +285,8 @@ def apply_lora(transformer) -> str | None:
         sets[FACIAL_NAME] = _load_facial(inner_dim)
     if os.environ.get("H3_ANIME", "on").lower() not in ("", "off", "none"):
         sets[ANIME_NAME] = _load_anime(inner_dim)
+    if os.environ.get("H3_ROUGH", "on").lower() not in ("", "off", "none"):
+        sets[ROUGH_NAME] = _load_rough(inner_dim)
     if not sets:
         return None
 
