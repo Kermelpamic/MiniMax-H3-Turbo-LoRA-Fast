@@ -270,6 +270,24 @@ def apply_lora(transformer) -> str | None:
     _PIPE_TRANSFORMER = transformer
 
     inner_dim = transformer.config.num_attention_heads * transformer.config.attention_head_dim
+    print(
+        "[debug] apply_lora "
+        f"inner_dim={inner_dim} LARRY_REPO={LARRY_REPO!r} LARRY_FILE={LARRY_FILE!r} "
+        f"LARRY_STRENGTH={LARRY_STRENGTH} DEFAULT_LORA={DEFAULT_LORA!r} "
+        f"LIGHTX_REPO={LIGHTX_REPO!r} LIGHTX_FILE={LIGHTX_FILE!r} LIGHTX8_FILE={LIGHTX8_FILE!r} "
+        f"H3_LIGHTX={os.environ.get('H3_LIGHTX', 'on')!r} H3_LIGHTX8={os.environ.get('H3_LIGHTX8', 'on')!r} "
+        f"REALISM_REPO={REALISM_REPO!r} REALISM_FILE={REALISM_FILE!r} "
+        f"H3_REALISM={os.environ.get('H3_REALISM', 'on')!r} "
+        f"JOYFOX_REPO={JOYFOX_REPO!r} JOYFOX_FILE={JOYFOX_FILE!r} "
+        f"H3_JOYFOX={os.environ.get('H3_JOYFOX', 'on')!r} "
+        f"FACIAL_REPO={FACIAL_REPO!r} FACIAL_FILE={FACIAL_FILE!r} "
+        f"H3_FACIAL={os.environ.get('H3_FACIAL', 'on')!r} "
+        f"ANIME_REPO={ANIME_REPO!r} ANIME_FILE={ANIME_FILE!r} "
+        f"H3_ANIME={os.environ.get('H3_ANIME', 'on')!r} "
+        f"ROUGH_REPO={ROUGH_REPO!r} ROUGH_FILE={ROUGH_FILE!r} "
+        f"H3_ROUGH={os.environ.get('H3_ROUGH', 'on')!r}",
+        flush=True,
+    )
     sets = {}
     if LARRY_FILE.lower() not in ("", "off", "none"):
         sets["larry"] = _load_larry(inner_dim)

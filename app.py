@@ -24,6 +24,43 @@ CONDITIONER_SPACE = os.environ.get("H3_CONDITIONER", "multimodalart/qwen3vl-cond
 PLACEMENT = os.environ.get("H3_PLACEMENT", "pack").lower()
 ATTENTION = os.environ.get("H3_ATTENTION", "_native_cudnn").lower()
 GPU_SIZE = os.environ.get("H3_GPU_SIZE", "xlarge")
+SPACE_ID = os.environ.get("SPACE_ID", "local")
+
+_VOLUME = os.environ.get("H3_VOLUME", "/workspace")
+if os.path.isdir(_VOLUME) and "HF_HOME" not in os.environ:
+    os.environ["HF_HOME"] = os.path.join(_VOLUME, "huggingface")
+    os.environ.setdefault("HUGGINGFACE_HUB_CACHE", os.path.join(os.environ["HF_HOME"], "hub"))
+
+_on_hf_space = os.environ.get("SYSTEM") == "spaces" or os.environ.get("SPACES_ZERO_GPU", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+print(
+    "[debug] startup "
+    f"SPACE_ID={SPACE_ID!r} SYSTEM={os.environ.get('SYSTEM')!r} "
+    f"SPACES_ZERO_GPU={os.environ.get('SPACES_ZERO_GPU')!r} on_hf_space={_on_hf_space} "
+    f"H3_VOLUME={_VOLUME!r} volume_exists={os.path.isdir(_VOLUME)} "
+    f"HF_HOME={os.environ.get('HF_HOME')!r} "
+    f"HUGGINGFACE_HUB_CACHE={os.environ.get('HUGGINGFACE_HUB_CACHE')!r} "
+    f"MODEL_REPO={MODEL_REPO!r} CONDITIONER_SPACE={CONDITIONER_SPACE!r} "
+    f"PLACEMENT={PLACEMENT!r} ATTENTION={ATTENTION!r} GPU_SIZE={GPU_SIZE!r} "
+    f"HF_TOKEN_set={bool(os.environ.get('HF_TOKEN') or os.environ.get('HUGGING_FACE_HUB_TOKEN'))}",
+    flush=True,
+)
+if not _on_hf_space:
+    def _local_gpu(*decorator_args, **decorator_kwargs):
+        def decorator(fn):
+            print(
+                f"[debug] spaces.GPU passthrough fn={getattr(fn, '__name__', fn)!r} "
+                f"args={decorator_args!r} kwargs={decorator_kwargs!r}",
+                flush=True,
+            )
+            return fn
+
+        return decorator
+
+    spaces.GPU = _local_gpu
 
 CANVASES = {
     "960x544 · 16:9 fast": (544, 960),
@@ -612,4 +649,19 @@ with gr.Blocks(title="MiniMax-H3-Turbo-LoRA-Fast") as demo:
 load_models()
 
 if __name__ == "__main__":
-    demo.queue(default_concurrency_limit=1, max_size=10).launch(theme=gr.themes.Citrus(), show_error=True, allowed_paths=[OUTPUT_DIR])
+    server_name = os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0")
+    server_port = int(os.environ.get("PORT", os.environ.get("GRADIO_SERVER_PORT", "7860")))
+    print(
+        "[debug] launch "
+        f"server_name={server_name!r} server_port={server_port} OUTPUT_DIR={OUTPUT_DIR!r} "
+        f"MIN_UI_DURATION={MIN_UI_DURATION} MAX_UI_DURATION={MAX_UI_DURATION} "
+        f"CHUNK_SECONDS={CHUNK_SECONDS} CONDITIONER_MAX_FRAMES={CONDITIONER_MAX_FRAMES}",
+        flush=True,
+    )
+    demo.queue(default_concurrency_limit=1, max_size=10).launch(
+        theme=gr.themes.Citrus(),
+        show_error=True,
+        allowed_paths=[OUTPUT_DIR],
+        server_name=server_name,
+        server_port=server_port,
+    )
