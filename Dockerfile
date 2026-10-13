@@ -7,7 +7,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     HF_HOME=/workspace/huggingface \
-    HUGGINGFACE_HUB_CACHE=/workspace/huggingface/hub
+    HUGGINGFACE_HUB_CACHE=/workspace/huggingface/hub \
+    H3_PLACEMENT=offload
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         python3 \
