@@ -168,8 +168,34 @@ def load_models() -> str | None:
         if PLACEMENT == "pack":
             pipe.transformer.to("cuda")
         if PLACEMENT == "offload":
-            manager.enable_auto_cpu_offload(device="cuda")
+            # The bf16 transformer is 61.7 GiB. On a 79 GiB card the forward activations do not fit beside it.
+            # Component offload keeps that whole module resident, so stream one block group at a time and
+            # leave the VAE hooks in place for decode.
+            margin = os.environ.get("H3_OFFLOAD_MARGIN", "12GB")
+            blocks_per_group = int(os.environ.get("H3_OFFLOAD_BLOCKS", "1"))
+            use_stream = os.environ.get("H3_OFFLOAD_STREAM", "").lower() in ("1", "true", "yes")
+            print(
+                "[debug] offload "
+                f"margin={margin!r} blocks_per_group={blocks_per_group} use_stream={use_stream} "
+                f"transformer={type(pipe.transformer).__name__} "
+                f"vae={type(getattr(pipe, 'vae', None)).__name__} "
+                f"audio_vae={type(getattr(pipe, 'audio_vae', None)).__name__}",
+                flush=True,
+            )
+            manager.enable_auto_cpu_offload(device="cuda", memory_reserve_margin=margin)
             _arm_decode_hooks(pipe)
+            from accelerate.hooks import remove_hook_from_module
+
+            remove_hook_from_module(pipe.transformer)
+            pipe.transformer.enable_group_offload(
+                onload_device=torch.device("cuda"),
+                offload_device=torch.device("cpu"),
+                offload_type="block_level",
+                num_blocks_per_group=blocks_per_group,
+                use_stream=use_stream,
+                low_cpu_mem_usage=True,
+            )
+            print("[debug] transformer block offload armed", flush=True)
 
         PIPE, MANAGER = pipe, manager
         MUTE_PIPE, MUTE_ERROR = _build_mute_pipe(pipe)
@@ -295,6 +321,19 @@ def _generate(
     lora="larry", with_audio=True, gpu_duration=DEFAULT_GPU_DURATION,
 ):
     import torch
+
+    if PLACEMENT == "offload" and torch.cuda.is_available():
+        free_bytes, total_bytes = torch.cuda.mem_get_info()
+        print(
+            "[debug] before generate "
+            f"free={free_bytes / 1024**3:.2f}GiB total={total_bytes / 1024**3:.2f}GiB "
+            f"allocated={torch.cuda.memory_allocated() / 1024**3:.2f}GiB "
+            f"reserved={torch.cuda.memory_reserved() / 1024**3:.2f}GiB "
+            f"height={height} width={width} num_frames={num_frames} steps={steps} "
+            f"with_audio={with_audio} lora={lora!r}",
+            flush=True,
+        )
+        torch.cuda.empty_cache()
 
     active_lora = _set_lora(PIPE.transformer, lora)
 

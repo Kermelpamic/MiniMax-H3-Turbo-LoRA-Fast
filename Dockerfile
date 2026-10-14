@@ -8,7 +8,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     HF_HOME=/workspace/huggingface \
     HUGGINGFACE_HUB_CACHE=/workspace/huggingface/hub \
-    H3_PLACEMENT=offload
+    H3_PLACEMENT=offload \
+    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         python3 \
